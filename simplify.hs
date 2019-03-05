@@ -4,7 +4,7 @@ import Data.List.Split
 
 main :: IO ()
 main = do
-	putStrLn (getNtSet ['A','B','S','D'] ['a','b'] [('A',"AB"),('B',"b"),('S',"A"),('S',"a"),('A',"a"),('A',"D"),('D',"A")])
+	putStrLn (getNtSet ['A','B','S','D'] ['a','b'] [('A',"AB"),('B',"b"),('S',"A"),('S',"a"),{-('A',"a"),-}('A',"D"),('D',"A")] [{-'B','S','A'-}])
 
 
 getFirstElements :: [(a,b)] -> [a]
@@ -18,11 +18,11 @@ checkAllItems [] _ = True
 checkAllItems (x:xs) y = elem x y && checkAllItems xs y
 
 
--- getNtSet ['A', 'B', 'S'] ['a','b','c','d'] [('S',"#"),('S',"AB"),('S',"aAb"),('A',"ab"),('B',"cBd"),('B',"CD")]
-getNtSet :: [Char] -> [Char] -> [(Char,String)] -> [Char]
-getNtSet [] _ _ = []
-getNtSet _ [] _ = []
-getNtSet _ _ [] = []
-getNtSet n t p = [ left | (left,right) <- p, checkAllItems right t || checkAllItems right (getFirstElements p)]
--- getNtSet n t p = [ left | (left,right) <- p, checkAllItems right t || checkAllItems right (getFirstElements p)]
-
+getNtSet :: [Char] -> [Char] -> [(Char,String)] -> [Char] -> [Char]
+getNtSet [] _ _ _ = []
+getNtSet _ [] _ _ = []
+getNtSet _ _ [] _ = []
+getNtSet n t p prev 
+                   | prev == new = new
+                   | otherwise   = getNtSet n t p new
+                   where new = [ left | (left,right) <- p, checkAllItems right t || checkAllItems right prev]
