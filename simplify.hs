@@ -1,6 +1,7 @@
 import System.IO
 import System.Environment
 import Data.List.Split
+import Data.List
 import Data.Char
 import qualified Data.Set as Set
 
@@ -8,10 +9,23 @@ import qualified Data.Set as Set
 
 main :: IO ()
 main = do
-	inputStr <- getContents
+	arguments <- getArgs
+	inputStr <- getInput (getInputFileName arguments) -- getContents
+	print inputStr
 	let cf_grammar = parseInput (lines inputStr)
-	print cf_grammar
+	-- print  (makeTwoTuples (cfg_rules cf_grammar))
+	-- print (makeTwoTuples (Set.toList (cfg_rules cf_grammar)))
+	-- putStrLn (getInputFileName arguments)
+	printGrammar cf_grammar
+	-- print (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (makeTwoTuples (cfg_rules cf_grammar)) (Set.fromList []))
+	-- print cf_grammar
 
+-- gets the input file name, if the was no input file name entered, returns empty string
+getInputFileName :: [String] -> String
+getInputFileName [] = ""
+getInputFileName (x:xs)
+                   | not (elem x ["-i", "-1", "-2"]) = x
+                   | otherwise = getInputFileName xs
 
 type Nonterminal = Char
 type Terminal = Char
@@ -21,7 +35,7 @@ data CFGrammar = CFGrammar {
     cfg_nonterminals::Set.Set Nonterminal,
     cfg_terminals::Set.Set Terminal,
     cfg_startSymbol::StartSymbol,
-    cfg_rules::[[String]]
+    cfg_rules::[(Char,String)]
     -- cfg_rules::Set.Set (Nonterminal,String)
 } deriving (Show)
 
@@ -35,7 +49,7 @@ parseInput (nonterminals:terminals:startsymbol:rules) = CFGrammar {
 } where parsedNonterminals = parseNonterminals nonterminals
         parsedTerminals = parseTerminals terminals
         startsymbolChecked = if elem (head startsymbol) (Set.toList parsedNonterminals) then head startsymbol else error "The start symbol is not from the list of nonterminals"
-        parsedRules = parseRules parsedNonterminals parsedTerminals rules
+        parsedRules = makeTwoTuples (parseRules parsedNonterminals parsedTerminals rules)
 
 
 -- -----------------------------
@@ -52,7 +66,7 @@ parseRules n t rs
 validateRules :: Set.Set Nonterminal -> Set.Set Terminal -> [[String]] -> Bool
 validateRules _ _ [] = True
 validateRules n t (x:xs)
-					| length x /= 2 || not (checkAllItems (x!!0) (Set.toList n)) || not (checkAllItems (x!!1) (Set.toList (n `Set.union` t))) = False
+					| length x /= 2 || not (checkAllItems (x!!0) (Set.toList n)) || not (checkAllItems (x!!1) (Set.toList (n `Set.union` t `Set.union` (Set.fromList ['#'])))) = False
 					| otherwise = validateRules n t xs
 
 
@@ -99,6 +113,10 @@ getInput :: [Char] -> IO [Char]
 getInput "" = getContents
 getInput filename = readFile filename
 
+-- [["A","f"],["B","g"],["C","h"],["D","i"],["E","j"]] ~~~~~~~~~~~> [('A',"f"),('B',"g"),('C',"h"),('D',"i"),('E',"j")]
+makeTwoTuples :: [[String]] -> [(Char,String)]
+makeTwoTuples [] = []
+makeTwoTuples (x:xs) = [(x!!0!!0, x!!1)] ++ (makeTwoTuples xs)
 
 -- Gets the list of pairs and returns the list of first parts of pairs
 getFirstElements :: [(a,b)] -> [a]
@@ -122,4 +140,18 @@ getNtSet _ _ [] _ = Set.fromList []
 getNtSet n t p prev 
                    | prev == new = new
                    | otherwise   = getNtSet n t p new
-                   where new = Set.fromList ([ left | (left,right) <- p, checkAllItems right (t ++ Set.toList prev)])
+                   where new = Set.fromList ([ left | (left,right) <- p, checkAllItems right (t ++ Set.toList prev ++ ['#'])])
+
+getRulesAsStrings :: [(Char,String)] -> [String]
+getRulesAsStrings [] = []
+getRulesAsStrings (x:xs) = [[left] ++ "->" ++ right] ++ getRulesAsStrings xs
+							where left = fst x
+							      right = snd x
+
+
+printGrammar :: CFGrammar -> IO ()
+printGrammar grammar = do
+	putStrLn (intersperse ',' (Set.toList (cfg_nonterminals grammar)))
+	putStrLn (intersperse ',' (Set.toList (cfg_terminals grammar)))
+	putStrLn [cfg_startSymbol grammar]
+	putStrLn (intercalate  "\n" (getRulesAsStrings (cfg_rules grammar)))
