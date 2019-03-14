@@ -11,12 +11,12 @@ main :: IO ()
 main = do
 	arguments <- getArgs
 	inputStr <- getInput (getInputFileName arguments) -- getContents
-	print inputStr
+	-- print inputStr
 	let cf_grammar = parseInput (lines inputStr)
 	-- print  (makeTwoTuples (cfg_rules cf_grammar))
 	-- print (makeTwoTuples (Set.toList (cfg_rules cf_grammar)))
 	-- putStrLn (getInputFileName arguments)
-	printGrammar cf_grammar
+	printGrammar (getGStripe cf_grammar)
 	-- print (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (makeTwoTuples (cfg_rules cf_grammar)) (Set.fromList []))
 	-- print cf_grammar
 
@@ -148,6 +148,16 @@ getRulesAsStrings (x:xs) = [[left] ++ "->" ++ right] ++ getRulesAsStrings xs
 							where left = fst x
 							      right = snd x
 
+getGStripe :: CFGrammar -> CFGrammar
+getGStripe cf_grammar = CFGrammar {
+	cfg_nonterminals = gstripe_nonterminals,
+	cfg_terminals = gstripe_terminals,
+	cfg_startSymbol = gstripe_startsymbol,
+	cfg_rules = gstripe_rules
+} where gstripe_nonterminals = Set.union (Set.fromList [cfg_startSymbol cf_grammar]) (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (cfg_rules cf_grammar) (Set.fromList []))
+        gstripe_terminals = cfg_terminals cf_grammar
+        gstripe_startsymbol = cfg_startSymbol cf_grammar
+        gstripe_rules = filter (\n -> (elem (fst n) (Set.toList gstripe_nonterminals)) && (checkAllItems (snd n) (Set.toList (Set.union gstripe_terminals gstripe_nonterminals)))) (cfg_rules cf_grammar)
 
 printGrammar :: CFGrammar -> IO ()
 printGrammar grammar = do
