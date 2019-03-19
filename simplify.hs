@@ -7,6 +7,12 @@ import qualified Data.Set as Set
 
 
 
+-- TODO
+--	- pri prepinacoch -1 a -2 kontrolovat, ci to generuje neprazdny jazyk
+--	- zoznam pravidiel nemoze byt prazdny
+--	- pravidlo nemoze byt napr. A -> abcd#mdks
+
+
 main :: IO ()
 main = do
 	arguments <- getArgs
@@ -16,7 +22,9 @@ main = do
 	-- print  (makeTwoTuples (cfg_rules cf_grammar))
 	-- print (makeTwoTuples (Set.toList (cfg_rules cf_grammar)))
 	-- putStrLn (getInputFileName arguments)
-	printGrammar (getGStripe cf_grammar)
+	let resultGrammar = processInputGrammar cf_grammar arguments
+	printGrammar resultGrammar
+	-- print (isTheLanguageNonEmpty cf_grammar)
 	-- print (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (makeTwoTuples (cfg_rules cf_grammar)) (Set.fromList []))
 	-- print cf_grammar
 
@@ -36,7 +44,6 @@ data CFGrammar = CFGrammar {
     cfg_terminals::Set.Set Terminal,
     cfg_startSymbol::StartSymbol,
     cfg_rules::[(Char,String)]
-    -- cfg_rules::Set.Set (Nonterminal,String)
 } deriving (Show)
 
 
@@ -51,7 +58,12 @@ parseInput (nonterminals:terminals:startsymbol:rules) = CFGrammar {
         startsymbolChecked = if elem (head startsymbol) (Set.toList parsedNonterminals) then head startsymbol else error "The start symbol is not from the list of nonterminals"
         parsedRules = makeTwoTuples (parseRules parsedNonterminals parsedTerminals rules)
 
-
+processInputGrammar :: CFGrammar -> [String] -> CFGrammar
+processInputGrammar g a
+					| elem "-i" a = g
+					| elem "-1" a = if isTheLanguageNonEmpty g then getGStripe g else error "The input grammar generates empty language"
+					| elem "-2" a = if isTheLanguageNonEmpty g then g else error "The input grammar generates empty language"
+					| otherwise   = error "The program must be launched with one of these parameters: -i, -1, -2"
 -- -----------------------------
 -- -----------------------------
 -- -----------------------------
@@ -59,35 +71,54 @@ parseInput (nonterminals:terminals:startsymbol:rules) = CFGrammar {
 -- -----------------------------
 parseRules :: Set.Set Nonterminal -> Set.Set Terminal -> [String] -> [[String]]
 parseRules n t rs
-				| validateRules n t rulesList = rulesList
-				| otherwise = error "Rules are not valid"
+				| not ((length rulesList) > 0) = error "The set of rules of input grammar cannot be empty"
+				| not (validateRules n t rulesList) = error "Rules are not valid"
+				| not (allUnique' rulesList)        = error "Set of rules of input grammar contains duplicate rules"
+				| otherwise = rulesList
 				where rulesList = map (splitOn "->") rs
 
 validateRules :: Set.Set Nonterminal -> Set.Set Terminal -> [[String]] -> Bool
 validateRules _ _ [] = True
 validateRules n t (x:xs)
-					| length x /= 2 || not (checkAllItems (x!!0) (Set.toList n)) || not (checkAllItems (x!!1) (Set.toList (n `Set.union` t `Set.union` (Set.fromList ['#'])))) = False
+					| length x /= 2 = False
+					| not (checkAllItems (x!!0) (Set.toList n)) = False
+					| not (checkAllItems (x!!1) (Set.toList (n `Set.union` t `Set.union` (Set.fromList ['#'])))) = False
 					| otherwise = validateRules n t xs
 
 
 parseNonterminals :: [Char] -> Set.Set Nonterminal
 parseNonterminals xs
-                   | (areNonterminals nonterminalsList) = Set.fromList (map head nonterminalsList)
-                   | otherwise = error "Set of nonterminals is incorrect"
-                   where nonterminalsList = Set.toList (Set.fromList (splitOn "," xs))
+                   | not (areNonterminals uniqueNonterminalsList) = error "Set of nonterminals is incorrect"
+                   | not (allUnique' nonterminalsList)            = error "Set of nonterminals contains duplicates"
+                   | otherwise                                    = Set.fromList (map head uniqueNonterminalsList)
+                   where uniqueNonterminalsList = Set.toList (Set.fromList (splitOn "," xs))
+                         nonterminalsList       = splitOn "," xs
+
+
+-- checks whether all elements of the list are unique
+-- 		allUnique' "foo bar" == False
+-- 		allUnique' ['a'..'z'] == True
+-- 		allUnique' [] == True (!)
+allUnique' :: (Eq a) => [a] -> Bool
+allUnique' [] = True
+allUnique' (x:xs)
+                 | elem x xs = False
+                 | otherwise = allUnique' xs
 
 parseTerminals :: [Char] -> Set.Set Terminal
 parseTerminals xs
-                   | (areTerminals terminalsList) = Set.fromList (map head terminalsList)
-                   | otherwise = error "Set of terminals is incorrect"
-                   where terminalsList = Set.toList (Set.fromList (splitOn "," xs))
+                   | not (areTerminals uniqueTerminalsList) = error "Set of terminals is incorrect"
+                   | not (allUnique' terminalsList)   = error "Set of terminals contains duplicates"
+                   | otherwise                        = Set.fromList (map head uniqueTerminalsList)
+                   where uniqueTerminalsList = Set.toList (Set.fromList (splitOn "," xs))
+                         terminalsList       = splitOn "," xs
 
 -- the list must contain only string of length 1 and all strings must be uppercase
--- A         ------> True
--- A,B,C,D   ------> True
--- A,BCD,EFG ------> False
--- a,b,c,d   ------> False
--- ahoj      ------> False
+-- 		A         ------> True
+-- 		A,B,C,D   ------> True
+-- 		A,BCD,EFG ------> False
+-- 		a,b,c,d   ------> False
+-- 		ahoj      ------> False
 areNonterminals :: [String] -> Bool
 areNonterminals [] = True
 areNonterminals (x:xs) = if length x == 1 && isUpper (head x)
@@ -142,11 +173,28 @@ getNtSet n t p prev
                    | otherwise   = getNtSet n t p new
                    where new = Set.fromList ([ left | (left,right) <- p, checkAllItems right (t ++ Set.toList prev ++ ['#'])])
 
+-- get final Vi set from algorithm 4.2
+-- getVSet :: [Char] -> [Char] -> [(Char,String)] -> Set.Set Char -> Set.Set Char
+-- getVSet [] _ _ _ = Set.fromList []
+-- getVSet _ [] _ _ = Set.fromList []
+-- getVSet _ _ [] _ = Set.fromList []
+-- getVSet n t p prev
+--                    | prev == new = new
+--                    | otherwise   = getVSet n t p new
+--                    where new = Set.fromList [ head rightSide | (leftSide, rightSide) <- p, elem leftSide (Set.toList prev) ]
+                   			-- where tmpxsd = [ (leftSide, rightSide) | (leftSide, rightSide) <- p, elem leftSide (Set.toList prev) ]
+
+
 getRulesAsStrings :: [(Char,String)] -> [String]
 getRulesAsStrings [] = []
 getRulesAsStrings (x:xs) = [[left] ++ "->" ++ right] ++ getRulesAsStrings xs
 							where left = fst x
 							      right = snd x
+
+isTheLanguageNonEmpty :: CFGrammar -> Bool
+isTheLanguageNonEmpty g = if elem (cfg_startSymbol g) (Set.toList (getNtSet (Set.toList (cfg_nonterminals g)) (Set.toList (cfg_terminals g)) (cfg_rules g) (Set.fromList [])))
+							then True
+							else False
 
 getGStripe :: CFGrammar -> CFGrammar
 getGStripe cf_grammar = CFGrammar {
