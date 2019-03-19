@@ -1,2 +1,2 @@
 all:
-	ghc simplify.hs -o simplify
+	ghc simplify-bkg.hs -o simplify-bkg

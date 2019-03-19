@@ -7,7 +7,7 @@ import qualified Data.Set as Set
 
 
 
--- TODO
+-- TODO - otestovat spravnost
 --	- pri prepinacoch -1 a -2 kontrolovat, ci to generuje neprazdny jazyk
 --	- zoznam pravidiel nemoze byt prazdny
 --	- pravidlo nemoze byt napr. A -> abcd#mdks
@@ -17,13 +17,18 @@ main :: IO ()
 main = do
 	arguments <- getArgs
 	inputStr <- getInput (getInputFileName arguments) -- getContents
-	-- print inputStr
 	let cf_grammar = parseInput (lines inputStr)
+	let resultGrammar = processInputGrammar cf_grammar arguments
+	printGrammar resultGrammar
+	
+	-- print (getViSet (['M','A','R','E','K']) (['a','h','o','j']) [('M',"A"),('A',"E"),('U',"z"),('E',"xU"),('M',"ahoj")] (Set.fromList ['M']))
+	
+
+
 	-- print  (makeTwoTuples (cfg_rules cf_grammar))
 	-- print (makeTwoTuples (Set.toList (cfg_rules cf_grammar)))
 	-- putStrLn (getInputFileName arguments)
-	let resultGrammar = processInputGrammar cf_grammar arguments
-	printGrammar resultGrammar
+	-- 
 	-- print (isTheLanguageNonEmpty cf_grammar)
 	-- print (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (makeTwoTuples (cfg_rules cf_grammar)) (Set.fromList []))
 	-- print cf_grammar
@@ -61,8 +66,8 @@ parseInput (nonterminals:terminals:startsymbol:rules) = CFGrammar {
 processInputGrammar :: CFGrammar -> [String] -> CFGrammar
 processInputGrammar g a
 					| elem "-i" a = g
-					| elem "-1" a = if isTheLanguageNonEmpty g then getGStripe g else error "The input grammar generates empty language"
-					| elem "-2" a = if isTheLanguageNonEmpty g then g else error "The input grammar generates empty language"
+					| elem "-1" a = if isTheLanguageNonEmpty g then getGStripe g                else error "The input grammar generates empty language"
+					| elem "-2" a = if isTheLanguageNonEmpty g then withoutUnreachableSymbols g else error "The input grammar generates empty language"
 					| otherwise   = error "The program must be launched with one of these parameters: -i, -1, -2"
 -- -----------------------------
 -- -----------------------------
@@ -81,6 +86,7 @@ validateRules :: Set.Set Nonterminal -> Set.Set Terminal -> [[String]] -> Bool
 validateRules _ _ [] = True
 validateRules n t (x:xs)
 					| length x /= 2 = False
+					| (elem '#' (x!!1)) && (length (x!!1) > 1) = False
 					| not (checkAllItems (x!!0) (Set.toList n)) = False
 					| not (checkAllItems (x!!1) (Set.toList (n `Set.union` t `Set.union` (Set.fromList ['#'])))) = False
 					| otherwise = validateRules n t xs
@@ -93,6 +99,12 @@ parseNonterminals xs
                    | otherwise                                    = Set.fromList (map head uniqueNonterminalsList)
                    where uniqueNonterminalsList = Set.toList (Set.fromList (splitOn "," xs))
                          nonterminalsList       = splitOn "," xs
+
+
+-- counts the occurences of given element in a list
+countOccurences :: (Eq a) => a -> [a] -> Int
+countOccurences i xs = length (filter (\x -> x == i) xs)
+
 
 
 -- checks whether all elements of the list are unique
@@ -174,10 +186,14 @@ getNtSet n t p prev
                    where new = Set.fromList ([ left | (left,right) <- p, checkAllItems right (t ++ Set.toList prev ++ ['#'])])
 
 -- get final Vi set from algorithm 4.2
--- getVSet :: [Char] -> [Char] -> [(Char,String)] -> Set.Set Char -> Set.Set Char
--- getVSet [] _ _ _ = Set.fromList []
--- getVSet _ [] _ _ = Set.fromList []
--- getVSet _ _ [] _ = Set.fromList []
+getViSet :: [Char] -> [Char] -> [(Char,String)] -> Set.Set Char -> Set.Set Char
+getViSet [] _ _ _ = Set.fromList []
+getViSet _ [] _ _ = Set.fromList []
+getViSet _ _ [] _ = Set.fromList []
+getViSet n t p prev
+                   | new == prev = new
+                   | otherwise   = getViSet n t p new
+                   where new = Set.union (prev) (Set.fromList (concat [ x | (a,x) <- p, elem a (Set.toList prev) ]))
 -- getVSet n t p prev
 --                    | prev == new = new
 --                    | otherwise   = getVSet n t p new
@@ -205,7 +221,20 @@ getGStripe cf_grammar = CFGrammar {
 } where gstripe_nonterminals = Set.union (Set.fromList [cfg_startSymbol cf_grammar]) (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (cfg_rules cf_grammar) (Set.fromList []))
         gstripe_terminals = cfg_terminals cf_grammar
         gstripe_startsymbol = cfg_startSymbol cf_grammar
-        gstripe_rules = filter (\n -> (elem (fst n) (Set.toList gstripe_nonterminals)) && (checkAllItems (snd n) (Set.toList (Set.union gstripe_terminals gstripe_nonterminals)))) (cfg_rules cf_grammar)
+        gstripe_rules = filter (\n -> (elem (fst n) (Set.toList gstripe_nonterminals)) && (checkAllItems (snd n) ((Set.toList (Set.union gstripe_terminals gstripe_nonterminals)) ++ ['#']))) (cfg_rules cf_grammar)
+
+withoutUnreachableSymbols :: CFGrammar -> CFGrammar
+withoutUnreachableSymbols g = CFGrammar {
+	cfg_nonterminals = new_nonterminals,
+	cfg_terminals    = new_terminals,
+	cfg_startSymbol  = new_startsymbol,
+	cfg_rules        = new_rules
+} where gStripeGrammar   = getGStripe g
+        viSet            = getViSet (Set.toList (cfg_nonterminals gStripeGrammar)) (Set.toList (cfg_terminals gStripeGrammar)) (cfg_rules gStripeGrammar) (Set.fromList [cfg_startSymbol gStripeGrammar])
+        new_nonterminals = Set.intersection viSet (cfg_nonterminals gStripeGrammar)
+        new_terminals    = Set.intersection viSet (cfg_terminals gStripeGrammar)
+        new_startsymbol  = cfg_startSymbol gStripeGrammar
+        new_rules        = [ (l,r) | (l,r) <- cfg_rules gStripeGrammar, elem l (Set.toList viSet), checkAllItems r (Set.toList viSet)]
 
 printGrammar :: CFGrammar -> IO ()
 printGrammar grammar = do
