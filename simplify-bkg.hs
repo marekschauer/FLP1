@@ -1,44 +1,21 @@
+-- ----------------------------------------------------
+-- ----------------------------------------------------
+-- ----------------------------------------------------
+-- FLP Project 
+-- Author: Marek Schauer (xschau00)
+-- Course: FLP - functional and logic programming
+-- Project: simplify-bkg
+-- Academic year: 2018/2019
+-- ----------------------------------------------------
+-- ----------------------------------------------------
+-- ----------------------------------------------------
+
 import System.IO
 import System.Environment
 import Data.List.Split
 import Data.List
 import Data.Char
 import qualified Data.Set as Set
-
-
-
--- TODO - otestovat spravnost
---	- pri prepinacoch -1 a -2 kontrolovat, ci to generuje neprazdny jazyk
---	- zoznam pravidiel nemoze byt prazdny
---	- pravidlo nemoze byt napr. A -> abcd#mdks
-
-
-main :: IO ()
-main = do
-	arguments <- getArgs
-	inputStr <- getInput (getInputFileName arguments) -- getContents
-	let cf_grammar = parseInput (lines inputStr)
-	let resultGrammar = processInputGrammar cf_grammar arguments
-	printGrammar resultGrammar
-	
-	-- print (getViSet (['M','A','R','E','K']) (['a','h','o','j']) [('M',"A"),('A',"E"),('U',"z"),('E',"xU"),('M',"ahoj")] (Set.fromList ['M']))
-	
-
-
-	-- print  (makeTwoTuples (cfg_rules cf_grammar))
-	-- print (makeTwoTuples (Set.toList (cfg_rules cf_grammar)))
-	-- putStrLn (getInputFileName arguments)
-	-- 
-	-- print (isTheLanguageNonEmpty cf_grammar)
-	-- print (getNtSet (Set.toList (cfg_nonterminals cf_grammar)) (Set.toList (cfg_terminals cf_grammar)) (makeTwoTuples (cfg_rules cf_grammar)) (Set.fromList []))
-	-- print cf_grammar
-
--- gets the input file name, if the was no input file name entered, returns empty string
-getInputFileName :: [String] -> String
-getInputFileName [] = ""
-getInputFileName (x:xs)
-                   | not (elem x ["-i", "-1", "-2"]) = x
-                   | otherwise = getInputFileName xs
 
 type Nonterminal = Char
 type Terminal = Char
@@ -52,6 +29,22 @@ data CFGrammar = CFGrammar {
 } deriving (Show)
 
 
+main :: IO ()
+main = do
+	arguments <- getArgs
+	inputStr <- getInput (getInputFileName arguments) -- getContents
+	let cf_grammar = parseInput (lines inputStr)
+	let resultGrammar = processInputGrammar cf_grammar arguments
+	printGrammar resultGrammar
+	
+-- gets the input file name, if the was no input file name entered, returns empty string
+getInputFileName :: [String] -> String
+getInputFileName [] = ""
+getInputFileName (x:xs)
+                   | not (elem x ["-i", "-1", "-2"]) = x
+                   | otherwise = getInputFileName xs
+
+-- Reads the grammar from list of lines
 parseInput :: [[Char]] -> CFGrammar 
 parseInput (nonterminals:terminals:startsymbol:rules) = CFGrammar {
 	cfg_nonterminals = parsedNonterminals,
@@ -63,17 +56,18 @@ parseInput (nonterminals:terminals:startsymbol:rules) = CFGrammar {
         startsymbolChecked = if elem (head startsymbol) (Set.toList parsedNonterminals) then head startsymbol else error "The start symbol is not from the list of nonterminals"
         parsedRules = makeTwoTuples (parseRules parsedNonterminals parsedTerminals rules)
 
+-- Processes the given grammar depending on given arguments
 processInputGrammar :: CFGrammar -> [String] -> CFGrammar
 processInputGrammar g a
 					| elem "-i" a = g
 					| elem "-1" a = if isTheLanguageNonEmpty g then getGStripe g                else error "The input grammar generates empty language"
 					| elem "-2" a = if isTheLanguageNonEmpty g then withoutUnreachableSymbols g else error "The input grammar generates empty language"
 					| otherwise   = error "The program must be launched with one of these parameters: -i, -1, -2"
--- -----------------------------
--- -----------------------------
--- -----------------------------
--- -----------------------------
--- -----------------------------
+
+-- Parses rules and checks following things:
+-- 	* detects, whether the grammar is empty?
+-- 	* validates rules
+-- 	* are all the rules unique?
 parseRules :: Set.Set Nonterminal -> Set.Set Terminal -> [String] -> [[String]]
 parseRules n t rs
 				| not ((length rulesList) > 0) = error "The set of rules of input grammar cannot be empty"
@@ -82,6 +76,10 @@ parseRules n t rs
 				| otherwise = rulesList
 				where rulesList = map (splitOn "->") rs
 
+-- Validates rules, checks following things:
+-- 	* do all rules contain just one '->'?
+-- 	* is the right side of rule composed only by terminals & nonterminals?
+-- 	* is the right side of the rule nonterminal?
 validateRules :: Set.Set Nonterminal -> Set.Set Terminal -> [[String]] -> Bool
 validateRules _ _ [] = True
 validateRules n t (x:xs)
@@ -91,7 +89,7 @@ validateRules n t (x:xs)
 					| not (checkAllItems (x!!1) (Set.toList (n `Set.union` t `Set.union` (Set.fromList ['#'])))) = False
 					| otherwise = validateRules n t xs
 
-
+-- Gets the nonterminals (checks for validity as well)
 parseNonterminals :: [Char] -> Set.Set Nonterminal
 parseNonterminals xs
                    | not (areNonterminals uniqueNonterminalsList) = error "Set of nonterminals is incorrect"
@@ -99,13 +97,6 @@ parseNonterminals xs
                    | otherwise                                    = Set.fromList (map head uniqueNonterminalsList)
                    where uniqueNonterminalsList = Set.toList (Set.fromList (splitOn "," xs))
                          nonterminalsList       = splitOn "," xs
-
-
--- counts the occurences of given element in a list
-countOccurences :: (Eq a) => a -> [a] -> Int
-countOccurences i xs = length (filter (\x -> x == i) xs)
-
-
 
 -- checks whether all elements of the list are unique
 -- 		allUnique' "foo bar" == False
@@ -117,6 +108,7 @@ allUnique' (x:xs)
                  | elem x xs = False
                  | otherwise = allUnique' xs
 
+-- Gets the terminals (checks for validity as well)
 parseTerminals :: [Char] -> Set.Set Terminal
 parseTerminals xs
                    | not (areTerminals uniqueTerminalsList) = error "Set of terminals is incorrect"
@@ -156,6 +148,8 @@ getInput :: [Char] -> IO [Char]
 getInput "" = getContents
 getInput filename = readFile filename
 
+-- Makes two-tuples from list of lists (the inner list must contain
+-- just the two elements)
 -- [["A","f"],["B","g"],["C","h"],["D","i"],["E","j"]] ~~~~~~~~~~~> [('A',"f"),('B',"g"),('C',"h"),('D',"i"),('E',"j")]
 makeTwoTuples :: [[String]] -> [(Char,String)]
 makeTwoTuples [] = []
@@ -165,6 +159,7 @@ makeTwoTuples (x:xs) = [(x!!0!!0, x!!1)] ++ (makeTwoTuples xs)
 getFirstElements :: [(a,b)] -> [a]
 getFirstElements xs = [y | (y,_) <- xs]
 
+-- Checks, whether all elements of the first list are contained in second list
 -- checkAllItems [1,2,3,4,5] [1..10] ~~~~~~~~~~~> True
 -- checkAllItems [1,2,3,4,5,89] [1..10] ~~~~~~~~~~~> False
 -- checkAllItems [1,2,3,89,4,5] [8..10] ~~~~~~~~~~~> False
@@ -172,10 +167,7 @@ checkAllItems :: (Eq a) => [a] -> [a] -> Bool
 checkAllItems [] _ = True
 checkAllItems (x:xs) y = elem x y && checkAllItems xs y
 
--- getNtSet ['A','B','S','D'] ['a','b'] [('A',"AB"),('B',"b"),('S',"A"),('S',"a"),('A',"a"),('A',"D"),('D',"A")] []
--- A,B,S,D
--- getNtSet ['A','B','S','D'] ['a','b'] [('A',"AB"),('B',"b"),('S',"A"),('S',"a"),('A',"D"),('D',"A")] []
--- B,S
+-- Gets the Nt set from algorithm 4.1
 getNtSet :: [Char] -> [Char] -> [(Char,String)] -> Set.Set Char -> Set.Set Char
 getNtSet [] _ _ _ = Set.fromList []
 getNtSet _ [] _ _ = Set.fromList []
@@ -185,7 +177,7 @@ getNtSet n t p prev
                    | otherwise   = getNtSet n t p new
                    where new = Set.fromList ([ left | (left,right) <- p, checkAllItems right (t ++ Set.toList prev ++ ['#'])])
 
--- get final Vi set from algorithm 4.2
+-- Gets the final Vi set from algorithm 4.2
 getViSet :: [Char] -> [Char] -> [(Char,String)] -> Set.Set Char -> Set.Set Char
 getViSet [] _ _ _ = Set.fromList []
 getViSet _ [] _ _ = Set.fromList []
@@ -194,24 +186,21 @@ getViSet n t p prev
                    | new == prev = new
                    | otherwise   = getViSet n t p new
                    where new = Set.union (prev) (Set.fromList (concat [ x | (a,x) <- p, elem a (Set.toList prev) ]))
--- getVSet n t p prev
---                    | prev == new = new
---                    | otherwise   = getVSet n t p new
---                    where new = Set.fromList [ head rightSide | (leftSide, rightSide) <- p, elem leftSide (Set.toList prev) ]
-                   			-- where tmpxsd = [ (leftSide, rightSide) | (leftSide, rightSide) <- p, elem leftSide (Set.toList prev) ]
 
-
+-- Converts the rules to their string representation
 getRulesAsStrings :: [(Char,String)] -> [String]
 getRulesAsStrings [] = []
 getRulesAsStrings (x:xs) = [[left] ++ "->" ++ right] ++ getRulesAsStrings xs
 							where left = fst x
 							      right = snd x
 
+-- Detects, whether the language generated by grammar is non-empty
 isTheLanguageNonEmpty :: CFGrammar -> Bool
 isTheLanguageNonEmpty g = if elem (cfg_startSymbol g) (Set.toList (getNtSet (Set.toList (cfg_nonterminals g)) (Set.toList (cfg_terminals g)) (cfg_rules g) (Set.fromList [])))
 							then True
 							else False
 
+-- Gets the set G with stripe from algorithm 4.3
 getGStripe :: CFGrammar -> CFGrammar
 getGStripe cf_grammar = CFGrammar {
 	cfg_nonterminals = gstripe_nonterminals,
@@ -223,6 +212,9 @@ getGStripe cf_grammar = CFGrammar {
         gstripe_startsymbol = cfg_startSymbol cf_grammar
         gstripe_rules = filter (\n -> (elem (fst n) (Set.toList gstripe_nonterminals)) && (checkAllItems (snd n) ((Set.toList (Set.union gstripe_terminals gstripe_nonterminals)) ++ ['#']))) (cfg_rules cf_grammar)
 
+
+-- Converts the given grammar to grammar without unreachable symbols
+-- The algorithm used for conversion is the Algorithm 4.3
 withoutUnreachableSymbols :: CFGrammar -> CFGrammar
 withoutUnreachableSymbols g = CFGrammar {
 	cfg_nonterminals = new_nonterminals,
@@ -236,6 +228,8 @@ withoutUnreachableSymbols g = CFGrammar {
         new_startsymbol  = cfg_startSymbol gStripeGrammar
         new_rules        = [ (l,r) | (l,r) <- cfg_rules gStripeGrammar, elem l (Set.toList viSet), checkAllItems r (Set.toList viSet)]
 
+
+-- Prints the given grammar
 printGrammar :: CFGrammar -> IO ()
 printGrammar grammar = do
 	putStrLn (intersperse ',' (Set.toList (cfg_nonterminals grammar)))
