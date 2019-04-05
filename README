@@ -1,0 +1,32 @@
+SIMPLIFY-BKG
+
+Context-free grammar simplifier
+
+This program simplifies given context-free grammar. Source code can be compiled by Makefile:
+	$ make
+
+Program can be then executed this way:
+	$ ./simplify-bkg parameters [input]
+where input is the path to the input file and parameters is one of the following:
+	-i ... 	Validates the grammar from the input and prints exactly the same grammar.
+	-1 ... 	Returns context-free grammar as the result of the first part of Algorithm 4.3.
+	-2 ... 	Returns context-free grammar without useless symbols.
+
+If the path is not specified, the program reads from standard input.
+
+The format of input grammar is following:
+	<list of nonterminals>\n
+	<list of terminals>\n
+	<start symbol>\n
+	<rule 1>\n
+		.
+		.
+		.
+	<rule n>\n
+where the list of nonterminals is the list of upper-cased letters separated by commas. The list
+if nonterminals is the list of lower-cased letters separated by commas. Rules have the following 
+format: A->x, where x is the combination of nonterminals and terminals or # (the epsilon rule).
+
+The output of the program prints the grammar of the same format, as is the input. Order of nonterminals 
+and terminals may differ from the input grammar - in result grammar these sets are sorted in 
+alphabetical order.
