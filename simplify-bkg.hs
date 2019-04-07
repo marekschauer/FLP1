@@ -76,7 +76,7 @@ processInputGrammar g a
 -- 	* are all the rules unique?
 parseRules :: Set.Set Nonterminal -> Set.Set Terminal -> [String] -> [[String]]
 parseRules n t rs
-				| not (null rulesList) = error "The set of rules of input grammar cannot be empty"
+				| null rulesList = error "The set of rules of input grammar cannot be empty"
 				| not (validateRules n t rulesList) = error "Rules are not valid"
 				| not (allUnique' rulesList)        = error "Set of rules of input grammar contains duplicate rules"
 				| otherwise = rulesList
